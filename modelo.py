@@ -103,7 +103,14 @@ class Promocion:
 
 
 class LineaCompra:
-    def __init__(self, codigo_producto, precio, cantidad, descuento=0):
+    def __init__(
+        self,
+        codigo_producto,
+        precio,
+        cantidad,
+        descuento=0,
+        nombre_producto=None,
+    ):
         self.codigo_producto = validar_entero(
             codigo_producto, "El codigo del producto"
         )
@@ -118,6 +125,9 @@ class LineaCompra:
             maximo=100,
             maximo_decimales=None,
         )
+        if nombre_producto is not None:
+            validar_texto(nombre_producto, "El nombre del producto")
+        self.nombre_producto = nombre_producto
 
     def calcular_importe(self):
         subtotal = self.precio * self.cantidad
