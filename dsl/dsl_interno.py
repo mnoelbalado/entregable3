@@ -1,146 +1,146 @@
-
-from modelo import Producto, Condicion, Promocion
+from modelo import Condicion, Producto, Promocion
 
 
 class DSLSupermercado:
     def __init__(self, supermercado):
         self.supermercado = supermercado
-        self.producto_actual = None
-        self.promocion_actual = None
-        self.condicion_actual = None
-        self.tipo_actual = None
-
-    def _guardar_actual(self):
-        if self.tipo_actual == "producto":
-            datos = self.producto_actual
-
-            if datos is not None:
-                if datos["nombre"] is None or datos["precio"] is None:
-                    raise ValueError(
-                        "El producto necesita nombre y precio"
-                    )
-
-                producto = Producto(
-                    datos["codigo"],
-                    datos["nombre"],
-                    datos["precio"],
-                    datos["categoria"]
-                )
-                self.supermercado.agregar_producto(producto)
-
-            self.producto_actual = None
-
-        elif self.tipo_actual == "promocion":
-            datos = self.promocion_actual
-
-            if datos is not None:
-                if datos["nombre"] is None or datos["descuento"] is None:
-                    raise ValueError(
-                        "La promoción necesita nombre y descuento"
-                    )
-
-                if not datos["condiciones"]:
-                    raise ValueError(
-                        "La promoción necesita al menos una condición"
-                    )
-
-                promocion = Promocion(
-                    datos["codigo"],
-                    datos["nombre"],
-                    datos["descuento"],
-                    datos["condiciones"]
-                )
-                self.supermercado.agregar_promocion(promocion)
-
-            self.promocion_actual = None
-
-        self.condicion_actual = None
-        self.tipo_actual = None
 
     def producto(self, codigo):
-        self._guardar_actual()
-
-        self.producto_actual = {
-            "codigo": codigo,
-            "nombre": None,
-            "precio": None,
-            "categoria": None
-        }
-        self.tipo_actual = "producto"
-        return self
+        return ProductoBuilder(self, codigo)
 
     def promocion(self, codigo):
-        self._guardar_actual()
+        return PromocionBuilder(self, codigo)
 
-        self.promocion_actual = {
-            "codigo": codigo,
-            "nombre": None,
-            "descuento": None,
-            "condiciones": []
-        }
-        self.tipo_actual = "promocion"
-        return self
+    def finalizar(self):
+        return self.supermercado
+
+
+class BuilderBase:
+    def __init__(self, dsl):
+        self.dsl = dsl
+        self._guardado = False
+
+    def _guardar(self):
+        raise NotImplementedError
+
+    def producto(self, codigo):
+        self._guardar()
+        return self.dsl.producto(codigo)
+
+    def promocion(self, codigo):
+        self._guardar()
+        return self.dsl.promocion(codigo)
+
+    def finalizar(self):
+        self._guardar()
+        return self.dsl.finalizar()
+
+
+class ProductoBuilder(BuilderBase):
+    def __init__(self, dsl, codigo):
+        super().__init__(dsl)
+        self.codigo = codigo
+        self._nombre = None
+        self._precio = None
+        self._categoria = None
 
     def nombre(self, nombre):
-        if self.tipo_actual == "producto":
-            self.producto_actual["nombre"] = nombre
-        elif self.tipo_actual == "promocion":
-            self.promocion_actual["nombre"] = nombre
-        else:
-            raise ValueError("No hay producto o promoción activa")
-
+        self._nombre = nombre
         return self
 
     def precio(self, precio):
-        if self.tipo_actual != "producto":
-            raise ValueError("No hay un producto activo")
-
-        self.producto_actual["precio"] = precio
+        self._precio = precio
         return self
 
     def categoria(self, categoria):
-        if self.tipo_actual != "producto":
-            raise ValueError("No hay un producto activo")
+        self._categoria = categoria
+        return self
 
-        self.producto_actual["categoria"] = categoria
+    def _guardar(self):
+        if self._guardado:
+            return
+        producto = Producto(
+            self.codigo,
+            self._nombre,
+            self._precio,
+            self._categoria,
+        )
+        self.dsl.supermercado.agregar_producto(producto)
+        self._guardado = True
+
+
+class PromocionBuilder(BuilderBase):
+    def __init__(self, dsl, codigo):
+        super().__init__(dsl)
+        self.codigo = codigo
+        self._nombre = None
+        self._descuento = None
+        self._condiciones = []
+
+    def nombre(self, nombre):
+        self._nombre = nombre
         return self
 
     def descuento(self, porcentaje):
-        if self.promocion_actual is None:
-            raise ValueError("No hay una promoción activa")
-
-        self.promocion_actual["descuento"] = porcentaje
-        self.tipo_actual = "promocion"
+        self._descuento = porcentaje
         return self
 
     def cuando_producto(self, codigo):
-        if self.promocion_actual is None:
-            raise ValueError("No hay una promoción activa")
+        return CondicionBuilder(self, codigo)
 
-        condicion = Condicion(codigo)
-        self.promocion_actual["condiciones"].append(condicion)
-        self.condicion_actual = condicion
-        self.tipo_actual = "condicion"
-        return self
+    def _agregar_condicion(self, condicion):
+        self._condiciones.append(condicion)
+
+    def _guardar(self):
+        if self._guardado:
+            return
+        promocion = Promocion(
+            self.codigo,
+            self._nombre,
+            self._descuento,
+            self._condiciones,
+        )
+        self.dsl.supermercado.agregar_promocion(promocion)
+        self._guardado = True
+
+
+class CondicionBuilder:
+    def __init__(self, promocion_builder, codigo_producto):
+        self.promocion_builder = promocion_builder
+        self.codigo_producto = codigo_producto
+        self._guardada = False
+
+    def _guardar(self, operador="=", cantidad=1):
+        if not self._guardada:
+            condicion = Condicion(
+                self.codigo_producto,
+                operador,
+                cantidad,
+            )
+            self.promocion_builder._agregar_condicion(condicion)
+            self._guardada = True
+        return self.promocion_builder
 
     def cantidad_igual(self, cantidad):
-        if self.condicion_actual is None:
-            raise ValueError("No hay una condición activa")
-
-        self.condicion_actual.operador = "="
-        self.condicion_actual.cantidad = cantidad
-        self.tipo_actual = "promocion"
-        return self
+        return self._guardar("=", cantidad)
 
     def cantidad_mayor_igual(self, cantidad):
-        if self.condicion_actual is None:
-            raise ValueError("No hay una condición activa")
+        return self._guardar(">=", cantidad)
 
-        self.condicion_actual.operador = ">="
-        self.condicion_actual.cantidad = cantidad
-        self.tipo_actual = "promocion"
-        return self
+    def nombre(self, nombre):
+        return self._guardar().nombre(nombre)
+
+    def descuento(self, porcentaje):
+        return self._guardar().descuento(porcentaje)
+
+    def cuando_producto(self, codigo):
+        return self._guardar().cuando_producto(codigo)
+
+    def producto(self, codigo):
+        return self._guardar().producto(codigo)
+
+    def promocion(self, codigo):
+        return self._guardar().promocion(codigo)
 
     def finalizar(self):
-        self._guardar_actual()
-        return self.supermercado
+        return self._guardar().finalizar()
