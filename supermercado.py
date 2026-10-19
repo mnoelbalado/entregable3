@@ -146,11 +146,22 @@ class Supermercado:
             )
             for descuento, cantidad in descuentos:
                 lineas.append(
-                    LineaCompra(codigo, producto.precio, cantidad, descuento)
+                    LineaCompra(
+                        codigo,
+                        producto.precio,
+                        cantidad,
+                        descuento,
+                        producto.nombre,
+                    )
                 )
             if restantes[codigo]:
                 lineas.append(
-                    LineaCompra(codigo, producto.precio, restantes[codigo])
+                    LineaCompra(
+                        codigo,
+                        producto.precio,
+                        restantes[codigo],
+                        nombre_producto=producto.nombre,
+                    )
                 )
 
         compra = Compra(lineas, promociones_aplicadas)
