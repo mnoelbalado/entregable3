@@ -118,6 +118,74 @@ def procesar_archivo(dsl, ruta, salida=print):
     return True
 
 
+def realizar_compra_interactiva(supermercado, entrada=input, salida=print):
+    mostrar_productos(supermercado, salida)
+    if not supermercado.listar_productos():
+        salida("No hay productos disponibles para realizar una compra.")
+        return False
+
+    productos_seleccionados = []
+    salida("\nIngrese FIN como codigo para finalizar la compra.")
+
+    while True:
+        codigo_ingresado = entrada("Codigo del producto: ").strip()
+        if codigo_ingresado.upper() == "FIN":
+            break
+
+        try:
+            codigo = int(codigo_ingresado)
+        except ValueError:
+            salida("Error: el codigo debe ser un numero entero.")
+            continue
+
+        try:
+            producto = supermercado.obtener_producto(codigo)
+        except ValueError as error:
+            salida(f"Error: {error}")
+            continue
+
+        cantidad_ingresada = entrada(
+            f"Cantidad de {producto.nombre}: "
+        ).strip()
+        try:
+            cantidad = int(cantidad_ingresada)
+        except ValueError:
+            salida("Error: la cantidad debe ser un numero entero positivo.")
+            continue
+
+        if cantidad <= 0:
+            salida("Error: la cantidad debe ser un numero entero positivo.")
+            continue
+
+        productos_seleccionados.append((codigo, cantidad))
+        salida(f"Agregado: {cantidad} x {producto.nombre}")
+
+    if not productos_seleccionados:
+        salida("Compra cancelada: no se seleccionaron productos.")
+        return False
+
+    texto_compra = "\n".join(
+        ["COMPRA"]
+        + [
+            f"PRODUCTO {codigo} CANTIDAD {cantidad}"
+            for codigo, cantidad in productos_seleccionados
+        ]
+        + ["FIN"]
+    )
+    errores = DSLCompras(supermercado).procesar(texto_compra)
+
+    if errores:
+        salida("No se pudo realizar la compra:")
+        for error in errores:
+            salida(f"  - {error}")
+        return False
+
+    compra = supermercado.compras[-1]
+    salida("Compra realizada correctamente.")
+    salida(f"Importe total: {compra.importe_total}")
+    return True
+
+
 def mostrar_menu(salida=print):
     salida("\nMenu principal")
     salida("1. Mantenimiento de productos y promociones")
@@ -125,6 +193,7 @@ def mostrar_menu(salida=print):
     salida("3. Ver la lista de productos")
     salida("4. Ver la lista de promociones")
     salida("5. Ver la lista de compras")
+    salida("6. Realizar una compra interactiva")
     salida("0. Salir")
 
 
@@ -151,6 +220,28 @@ def ejecutar_menu(supermercado, entrada=input, salida=print):
             mostrar_promociones(supermercado, salida)
         elif opcion == "5":
             mostrar_compras(supermercado, salida)
+        elif opcion == "6":
+            if entrada is input and salida is print:
+                try:
+                    from compra_ui import abrir_pantalla_compra
+
+                    if not supermercado.listar_productos():
+                        salida(
+                            "No hay productos disponibles para realizar "
+                            "una compra."
+                        )
+                    else:
+                        abrir_pantalla_compra(supermercado)
+                except (ImportError, RuntimeError) as error:
+                    salida(
+                        "No se pudo abrir la pantalla de compra "
+                        f"({error}). Se usara el modo consola."
+                    )
+                    realizar_compra_interactiva(
+                        supermercado, entrada, salida
+                    )
+            else:
+                realizar_compra_interactiva(supermercado, entrada, salida)
         else:
             salida("Opcion invalida.")
 
