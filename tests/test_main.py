@@ -7,6 +7,7 @@ from main import (
     mostrar_productos,
     mostrar_promociones,
     procesar_archivo,
+    realizar_compra_interactiva,
 )
 from modelo import Producto
 from supermercado import Supermercado
@@ -113,6 +114,106 @@ class TestMain(unittest.TestCase):
 
         self.assertFalse(resultado)
         self.assertIn("No se pudo leer", "\n".join(salida))
+
+    def test_compra_interactiva_registra_compra_y_aplica_promocion(self):
+        entradas = iter(["3", "1", "4", "2", "FIN"])
+        salida = []
+
+        resultado = realizar_compra_interactiva(
+            self.supermercado,
+            entrada=lambda _mensaje: next(entradas),
+            salida=salida.append,
+        )
+
+        self.assertTrue(resultado)
+        self.assertEqual(len(self.supermercado.compras), 1)
+        compra = self.supermercado.compras[0]
+        self.assertEqual(
+            [promocion.codigo for promocion in compra.promociones_aplicadas],
+            [2],
+        )
+        self.assertIn("Compra realizada correctamente.", salida)
+        self.assertIn("Importe total: 300.0", salida)
+
+    def test_compra_interactiva_permite_reintentar_datos_invalidos(self):
+        entradas = iter(
+            [
+                "abc",
+                "99",
+                "1",
+                "cero",
+                "1",
+                "0",
+                "1",
+                "-2",
+                "1",
+                "2",
+                "FIN",
+            ]
+        )
+        salida = []
+
+        resultado = realizar_compra_interactiva(
+            self.supermercado,
+            entrada=lambda _mensaje: next(entradas),
+            salida=salida.append,
+        )
+
+        self.assertTrue(resultado)
+        compra = self.supermercado.compras[0]
+        self.assertEqual(compra.lineas[0].codigo_producto, 1)
+        self.assertEqual(compra.lineas[0].cantidad, 2)
+        self.assertEqual(
+            sum(mensaje.startswith("Error:") for mensaje in salida),
+            5,
+        )
+
+    def test_compra_interactiva_se_puede_cancelar(self):
+        salida = []
+
+        resultado = realizar_compra_interactiva(
+            self.supermercado,
+            entrada=lambda _mensaje: "fin",
+            salida=salida.append,
+        )
+
+        self.assertFalse(resultado)
+        self.assertEqual(self.supermercado.compras, [])
+        self.assertIn(
+            "Compra cancelada: no se seleccionaron productos.",
+            salida,
+        )
+
+    def test_compra_interactiva_admite_producto_con_codigo_cero(self):
+        self.supermercado.agregar_producto(Producto(0, "Codigo cero", 10))
+        entradas = iter(["0", "2", "FIN"])
+
+        resultado = realizar_compra_interactiva(
+            self.supermercado,
+            entrada=lambda _mensaje: next(entradas),
+            salida=lambda _mensaje: None,
+        )
+
+        self.assertTrue(resultado)
+        compra = self.supermercado.compras[0]
+        self.assertEqual(compra.lineas[0].codigo_producto, 0)
+        self.assertEqual(compra.lineas[0].cantidad, 2)
+
+    def test_menu_integra_la_compra_interactiva(self):
+        entradas = iter(["6", "2", "1", "FIN", "0"])
+        salida = []
+
+        ejecutar_menu(
+            self.supermercado,
+            entrada=lambda _mensaje: next(entradas),
+            salida=salida.append,
+        )
+
+        self.assertEqual(len(self.supermercado.compras), 1)
+        compra = self.supermercado.compras[0]
+        self.assertEqual(compra.lineas[0].codigo_producto, 2)
+        self.assertEqual(compra.lineas[0].cantidad, 1)
+        self.assertIn("Compra realizada correctamente.", salida)
 
 
 if __name__ == "__main__":
