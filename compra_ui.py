@@ -1,4 +1,4 @@
-"""Interfaz grafica sencilla para registrar una compra."""
+"""Interfaz grafica para registrar una compra."""
 
 from copy import deepcopy
 import tkinter as tk
